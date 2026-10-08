@@ -95,6 +95,10 @@ tr.lead td.pts { color: var(--accent); }
 .solid-danger { padding: 9px 12px; border-radius: 8px; background: var(--danger); color: var(--surface); font-weight: 600; font-size: .9rem; }
 .actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
+.paste { width: 100%; min-height: 110px; font: inherit; font-size: .9rem; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); resize: vertical; }
+.solid { padding: 11px 14px; border-radius: 10px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+.preview { margin: 0; padding: 10px; border-radius: 8px; background: var(--bg); font-size: .85rem; white-space: pre-wrap; overflow-wrap: anywhere; font-family: var(--body); }
+.msg { font-size: .85rem; font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .btns button:active { transform: none; } }
 </style>
 </head><body>
@@ -112,10 +116,19 @@ tr.lead td.pts { color: var(--accent); }
 
   <section class="board" id="board" aria-live="polite"></section>
 
+  <section class="card" id="send" aria-live="polite"></section>
+
   <section class="card">
     <h2>Standings</h2>
     <div class="tbl-wrap"><table id="standings"></table></div>
     <p class="note">Each column is the team's total over both rounds, with its rank below. Points add up the ranks across the four challenges, so the lowest score wins. Tied teams share a rank.</p>
+  </section>
+
+  <section class="card">
+    <h2>Collect results</h2>
+    <p class="note">For the trainer. Paste the results the teams sent you, one or several at once (copying a whole chat is fine). Each team's latest result replaces its counts, matched by team name.</p>
+    <textarea class="paste" id="paste" aria-label="Paste results here" placeholder="Paste results here"></textarea>
+    <div class="actions"><button class="solid" id="import">Add results</button><span class="msg" id="importMsg"></span></div>
   </section>
 
   <section class="card">
@@ -193,6 +206,39 @@ function renderBoard() {
   }
 }
 
+// Results travel as text: a readable summary plus one code line the trainer's phone reads back.
+const CODE_RE = /TO1:([^:\s]+):(\d+(?:\.\d+){3}):(\d+(?:\.\d+){3})/g;
+function resultText(t) {
+  const rd = r => STATIONS.map(s => `${s.name} ${t.counts[r][s.id]}`).join(", ");
+  const code = ["TO1", encodeURIComponent(t.name), ...[0, 1].map(r => STATIONS.map(s => t.counts[r][s.id]).join("."))].join(":");
+  return `Team Output · ${t.name}\nRunde 1: ${rd(0)}\nRunde 2: ${rd(1)}\n${code}`;
+}
+
+function importResults(text) {
+  const done = [];
+  for (const m of text.matchAll(CODE_RE)) {
+    let name; try { name = decodeURIComponent(m[1]).trim(); } catch { continue; }
+    const counts = [m[2], m[3]].map(x => { const v = x.split(".").map(Number); return Object.fromEntries(STATIONS.map((s, i) => [s.id, v[i]])); });
+    let t = state.teams.find(t => t.name.trim().toLowerCase() === name.toLowerCase());
+    // A new name takes over an unused "Team N" slot, so renamed teams don't leave empty rows behind.
+    if (!t) t = state.teams.find(t => /^Team \d+$/.test(t.name) && !done.includes(t.name) && t.counts.every(c => STATIONS.every(s => !c[s.id])));
+    if (!t) { t = newTeam(state.teams.length + 1); state.teams.push(t); }
+    t.name = name.slice(0, 24);
+    t.counts = counts;
+    if (!done.includes(t.name)) done.push(t.name);
+  }
+  return done;
+}
+
+function renderSend() {
+  const t = state.teams[state.active];
+  $("send").innerHTML = `
+    <h2>Send results</h2>
+    <p class="note">When you're done, send ${esc(t.name)}'s result to your trainer or the group chat.</p>
+    <pre class="preview">${esc(resultText(t))}</pre>
+    <div class="actions">${navigator.share ? `<button class="solid" id="share">Share</button>` : ""}<button class="ghost" id="copy">Copy</button><span class="msg" id="sendMsg"></span></div>`;
+}
+
 function ranks(sid) {
   const vals = state.teams.map(t => total(t, sid));
   return vals.map(v => 1 + vals.filter(x => x > v).length);
@@ -223,7 +269,7 @@ function renderSetup() {
     </div>`).join("");
 }
 
-function renderAll() { renderRound(); renderTeams(); renderBoard(); renderStandings(); }
+function renderAll() { renderRound(); renderTeams(); renderBoard(); renderSend(); renderStandings(); }
 
 document.addEventListener("click", e => {
   const b = e.target.closest("button"); if (!b) return;
@@ -241,6 +287,18 @@ document.addEventListener("click", e => {
     renderSetup();
   }
   else if (b.id === "addTeam") { state.teams.push(newTeam(state.teams.length + 1)); state.active = state.teams.length - 1; renderSetup(); }
+  else if (b.id === "share") { navigator.share({ text: resultText(state.teams[state.active]) }).catch(() => {}); return; }
+  else if (b.id === "copy") {
+    const say = m => { $("sendMsg").textContent = m; };
+    navigator.clipboard.writeText(resultText(state.teams[state.active])).then(() => say("Copied"), () => say("Couldn't copy, select the text above instead"));
+    return;
+  }
+  else if (b.id === "import") {
+    const done = importResults($("paste").value);
+    $("importMsg").textContent = done.length ? "Added: " + done.join(", ") : "No results found in that text";
+    if (!done.length) return;
+    $("paste").value = ""; renderSetup();
+  }
   else if (b.id === "reset") {
     $("resetArea").innerHTML = `<span class="confirm">Clear every count for all teams? <button class="solid-danger" id="resetYes">Reset</button><button class="ghost" id="resetNo">Cancel</button></span>`;
     return;
@@ -256,7 +314,7 @@ document.addEventListener("click", e => {
 document.addEventListener("input", e => {
   const i = e.target.dataset.name; if (i === undefined) return;
   state.teams[+i].name = e.target.value.trim() || "Team " + (+i + 1);
-  save(); renderTeams(); renderBoard(); renderStandings();
+  save(); renderTeams(); renderBoard(); renderSend(); renderStandings();
 });
 
 // Keep the screen awake while counting, where the browser allows it.
