@@ -1,0 +1,269 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Team Output Counter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;800&family=Barlow:wght@400;600&display=swap">
+<style>
+/* Layout: one-column phone scoreboard. Header + round switch, team tabs, 2x2 station counters, standings table, team setup. */
+:root {
+  --bg: #eef0ec;
+  --surface: #ffffff;
+  --fg: #16191a;
+  --muted: #5f6763;
+  --line: #d3d8d3;
+  --accent: #1f6feb;
+  --accent-fg: #ffffff;
+  --press: #e3e7e2;
+  --danger: #c2321f;
+  --t1: #1f6feb; --t2: #d9480f; --t3: #2b8a3e; --t4: #9c36b5; --t5: #c08a00; --t6: #0c8599;
+  --display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+  --body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111413; --surface: #1b1f1e; --fg: #eef1ee; --muted: #9aa39f; --line: #2c3331;
+  --accent: #5b9dff; --accent-fg: #0b1220; --press: #262c2a; --danger: #ff6b55;
+  --t1: #5b9dff; --t2: #ff8a4c; --t3: #5fcf75; --t4: #d27ff0; --t5: #f2c230; --t6: #3fc7dc;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #111413; --surface: #1b1f1e; --fg: #eef1ee; --muted: #9aa39f; --line: #2c3331;
+  --accent: #5b9dff; --accent-fg: #0b1220; --press: #262c2a; --danger: #ff6b55;
+  --t1: #5b9dff; --t2: #ff8a4c; --t3: #5fcf75; --t4: #d27ff0; --t5: #f2c230; --t6: #3fc7dc;
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 16px; -webkit-tap-highlight-color: transparent; }
+.wrap { max-width: 640px; margin: 0 auto; padding-inline: 16px; padding-block: 12px 40px; display: flex; flex-direction: column; gap: 18px; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
+button:focus-visible, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-family: var(--display); font-weight: 800; font-size: 2rem; line-height: 1; margin: 0; letter-spacing: .01em; text-transform: uppercase; }
+h1 small { display: block; font-family: var(--body); font-weight: 600; font-size: .75rem; letter-spacing: .08em; color: var(--muted); margin-top: 4px; }
+h2 { font-family: var(--display); font-weight: 800; font-size: 1.3rem; text-transform: uppercase; letter-spacing: .03em; margin: 0; }
+
+.seg { display: inline-flex; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+.seg button { font-family: var(--display); font-weight: 800; font-size: 1.05rem; letter-spacing: .04em; text-transform: uppercase; padding: 8px 16px; border-radius: 999px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+
+.teams { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.teams button { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 2px solid var(--line); background: var(--surface); font-weight: 600; }
+.teams button .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--tc); }
+.teams button[aria-pressed="true"] { border-color: var(--tc); box-shadow: inset 0 0 0 1px var(--tc); }
+
+.board { border-top: 6px solid var(--tc); background: var(--surface); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.board-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.board-head .name { font-family: var(--display); font-weight: 800; font-size: 1.5rem; text-transform: uppercase; }
+.board-head .rnd { color: var(--muted); font-size: .85rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 360px) { .grid { grid-template-columns: 1fr; } }
+
+.st { border: 1px solid var(--line); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.st-top { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.st-name { font-weight: 600; font-size: .9rem; }
+.st-unit { font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.st-info { font-size: .72rem; color: var(--muted); margin-top: -6px; }
+.st-val { font-family: var(--display); font-weight: 800; font-size: 3.2rem; line-height: .95; font-variant-numeric: tabular-nums; text-align: center; width: 100%; padding: 2px 0; border-radius: 8px; }
+.st-val:active { background: var(--press); }
+.st-input { font-family: var(--display); font-weight: 800; font-size: 2.6rem; text-align: center; width: 100%; border: 2px solid var(--accent); border-radius: 8px; background: var(--bg); color: var(--fg); padding: 2px 0; }
+.st-other { text-align: center; font-size: .75rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.btns button { padding: 12px 0; border-radius: 10px; background: var(--press); font-family: var(--display); font-weight: 800; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.btns button.plus { background: var(--tc); color: var(--accent-fg); }
+.btns button:active { transform: scale(.96); }
+.minus-row { display: flex; justify-content: center; }
+.minus-row button { font-size: .8rem; color: var(--muted); padding: 4px 10px; border-radius: 8px; }
+.minus-row button:active { background: var(--press); }
+
+.card { background: var(--surface); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.tbl-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: .9rem; }
+th, td { padding: 8px 6px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+th { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+td .rk { display: block; font-size: .7rem; color: var(--muted); }
+td.pts { font-family: var(--display); font-weight: 800; font-size: 1.2rem; }
+tr.lead td.pts { color: var(--accent); }
+.tname { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.tname .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--tc); }
+.note { font-size: .8rem; color: var(--muted); margin: 0; line-height: 1.45; }
+
+.setup-row { display: flex; gap: 8px; align-items: center; }
+.setup-row input { flex: 1; min-width: 0; font: inherit; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); }
+.setup-row .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--tc); flex: 0 0 auto; }
+.ghost { padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line); font-weight: 600; font-size: .9rem; }
+.ghost.danger { color: var(--danger); border-color: var(--danger); }
+.solid-danger { padding: 9px 12px; border-radius: 8px; background: var(--danger); color: var(--surface); font-weight: 600; font-size: .9rem; }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.confirm { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: .9rem; }
+@media (prefers-reduced-motion: reduce) { .btns button:active { transform: none; } }
+</style>
+</head><body>
+
+<div class="wrap">
+  <header>
+    <h1>Team Output<small>Thursday Athletic · 4 teams of 3 · 2 rounds</small></h1>
+    <div class="seg" role="group" aria-label="Round">
+      <button id="r0" data-round="0">Runde 1</button>
+      <button id="r1" data-round="1">Runde 2</button>
+    </div>
+  </header>
+
+  <nav class="teams" id="teams" aria-label="Teams"></nav>
+
+  <section class="board" id="board" aria-live="polite"></section>
+
+  <section class="card">
+    <h2>Standings</h2>
+    <div class="tbl-wrap"><table id="standings"></table></div>
+    <p class="note">Each column is the team's total over both rounds, with its rank below. Points add up the ranks across the four challenges, so the lowest score wins. Tied teams share a rank.</p>
+  </section>
+
+  <section class="card">
+    <h2>Teams</h2>
+    <div id="setup" style="display:flex;flex-direction:column;gap:8px"></div>
+    <div class="actions">
+      <button class="ghost" id="addTeam">Add team</button>
+      <span id="resetArea"><button class="ghost danger" id="reset">Reset all counts</button></span>
+    </div>
+  </section>
+</div>
+
+<script>
+const STATIONS = [
+  { id: "erg", name: "Erg",       unit: "cals",   steps: [1, 5, 10],    info: "90s/person · Ski, Row, Bike" },
+  { id: "wb",  name: "Wallballs", unit: "reps",   steps: [1, 5, 10],    info: "5 min AMRAP · max 20/ball" },
+  { id: "run", name: "Run",       unit: "meters", steps: [10, 50, 100], info: "5 min · +1% incline/min" },
+  { id: "bbj", name: "BBJs",      unit: "lanes",  steps: [1, 2, 5],     info: "2 work · 1 rest · 6 m lane" },
+];
+const KEY = "team-output-v1";
+const COLORS = 6;
+
+function blankCounts() { return [0, 1].map(() => Object.fromEntries(STATIONS.map(s => [s.id, 0]))); }
+function newTeam(n) { return { id: Math.random().toString(36).slice(2, 9), name: "Team " + n, counts: blankCounts() }; }
+function defaultState() { return { round: 0, active: 0, teams: [1, 2, 3, 4].map(newTeam) }; }
+
+let state;
+try { state = JSON.parse(localStorage.getItem(KEY)) || defaultState(); } catch { state = defaultState(); }
+if (!state.teams || !state.teams.length) state = defaultState();
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {} }
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tc = i => `--tc: var(--t${(i % COLORS) + 1})`;
+const total = (t, sid) => t.counts[0][sid] + t.counts[1][sid];
+let editing = null;
+
+function renderRound() {
+  [0, 1].forEach(r => $("r" + r).setAttribute("aria-pressed", state.round === r));
+}
+
+function renderTeams() {
+  $("teams").innerHTML = state.teams.map((t, i) =>
+    `<button style="${tc(i)}" data-team="${i}" aria-pressed="${i === state.active}"><span class="dot"></span>${esc(t.name)}</button>`).join("");
+}
+
+function renderBoard() {
+  const i = state.active, t = state.teams[i], r = state.round, other = 1 - r;
+  const board = $("board");
+  board.setAttribute("style", tc(i));
+  board.innerHTML = `
+    <div class="board-head"><span class="name">${esc(t.name)}</span><span class="rnd">Runde ${r + 1}</span></div>
+    <div class="grid">${STATIONS.map(s => `
+      <div class="st">
+        <div class="st-top"><span class="st-name">${s.name}</span><span class="st-unit">${s.unit}</span></div>
+        <div class="st-info">${s.info}</div>
+        ${editing === s.id
+          ? `<input class="st-input" id="edit-${s.id}" type="number" inputmode="numeric" min="0" value="${t.counts[r][s.id]}" aria-label="${s.name} ${s.unit}">`
+          : `<button class="st-val" data-edit="${s.id}" aria-label="${s.name}: ${t.counts[r][s.id]} ${s.unit}. Tap to type a number">${t.counts[r][s.id]}</button>`}
+        <div class="btns">${s.steps.map(n => `<button class="plus" data-st="${s.id}" data-d="${n}">+${n}</button>`).join("")}</div>
+        <div class="minus-row"><button data-st="${s.id}" data-d="${-s.steps[0]}">Undo &minus;${s.steps[0]}</button></div>
+        <div class="st-other">Runde ${other + 1}: ${t.counts[other][s.id]} · Total ${total(t, s.id)}</div>
+      </div>`).join("")}
+    </div>`;
+  if (editing) {
+    const inp = $("edit-" + editing);
+    inp.focus(); inp.select();
+    const commit = () => {
+      const v = Math.max(0, Math.round(Number(inp.value) || 0));
+      state.teams[state.active].counts[state.round][editing] = v;
+      editing = null; save(); renderAll();
+    };
+    inp.addEventListener("blur", commit, { once: true });
+    inp.addEventListener("keydown", e => { if (e.key === "Enter") inp.blur(); });
+  }
+}
+
+function ranks(sid) {
+  const vals = state.teams.map(t => total(t, sid));
+  return vals.map(v => 1 + vals.filter(x => x > v).length);
+}
+
+function renderStandings() {
+  const rk = Object.fromEntries(STATIONS.map(s => [s.id, ranks(s.id)]));
+  const rows = state.teams.map((t, i) => ({ t, i, pts: STATIONS.reduce((a, s) => a + rk[s.id][i], 0) }));
+  rows.sort((a, b) => a.pts - b.pts);
+  const any = state.teams.some(t => STATIONS.some(s => total(t, s.id) > 0));
+  const best = rows[0].pts;
+  $("standings").innerHTML = `
+    <thead><tr><th>Team</th>${STATIONS.map(s => `<th>${s.name}<br>${s.unit}</th>`).join("")}<th>Points</th></tr></thead>
+    <tbody>${rows.map(({ t, i, pts }) => `
+      <tr class="${any && pts === best ? "lead" : ""}">
+        <td><span class="tname" style="${tc(i)}"><span class="dot"></span>${esc(t.name)}</span></td>
+        ${STATIONS.map(s => `<td>${total(t, s.id)}<span class="rk">#${rk[s.id][i]}</span></td>`).join("")}
+        <td class="pts">${pts}</td>
+      </tr>`).join("")}</tbody>`;
+}
+
+function renderSetup() {
+  $("setup").innerHTML = state.teams.map((t, i) => `
+    <div class="setup-row" style="${tc(i)}">
+      <span class="dot"></span>
+      <input id="name-${t.id}" data-name="${i}" value="${esc(t.name)}" aria-label="Team ${i + 1} name" maxlength="24">
+      ${state.teams.length > 1 ? `<button class="ghost" data-remove="${i}" aria-label="Remove ${esc(t.name)}">Remove</button>` : ""}
+    </div>`).join("");
+}
+
+function renderAll() { renderRound(); renderTeams(); renderBoard(); renderStandings(); }
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.round) { state.round = +b.dataset.round; editing = null; }
+  else if (b.dataset.team) { state.active = +b.dataset.team; editing = null; }
+  else if (b.dataset.st) {
+    const c = state.teams[state.active].counts[state.round];
+    c[b.dataset.st] = Math.max(0, c[b.dataset.st] + +b.dataset.d);
+    if (navigator.vibrate) try { navigator.vibrate(8); } catch {}
+  }
+  else if (b.dataset.edit) { editing = b.dataset.edit; renderBoard(); return; }
+  else if (b.dataset.remove) {
+    state.teams.splice(+b.dataset.remove, 1);
+    state.active = Math.min(state.active, state.teams.length - 1);
+    renderSetup();
+  }
+  else if (b.id === "addTeam") { state.teams.push(newTeam(state.teams.length + 1)); state.active = state.teams.length - 1; renderSetup(); }
+  else if (b.id === "reset") {
+    $("resetArea").innerHTML = `<span class="confirm">Clear every count for all teams? <button class="solid-danger" id="resetYes">Reset</button><button class="ghost" id="resetNo">Cancel</button></span>`;
+    return;
+  }
+  else if (b.id === "resetYes" || b.id === "resetNo") {
+    if (b.id === "resetYes") { state.teams.forEach(t => t.counts = blankCounts()); state.round = 0; }
+    $("resetArea").innerHTML = `<button class="ghost danger" id="reset">Reset all counts</button>`;
+  }
+  else return;
+  save(); renderAll();
+});
+
+document.addEventListener("input", e => {
+  const i = e.target.dataset.name; if (i === undefined) return;
+  state.teams[+i].name = e.target.value.trim() || "Team " + (+i + 1);
+  save(); renderTeams(); renderBoard(); renderStandings();
+});
+
+// Keep the screen awake while counting, where the browser allows it.
+async function wake() { try { if (navigator.wakeLock && document.visibilityState === "visible") await navigator.wakeLock.request("screen"); } catch {} }
+document.addEventListener("visibilitychange", wake);
+wake();
+
+renderSetup(); renderAll();
+</script>
+</body></html>
